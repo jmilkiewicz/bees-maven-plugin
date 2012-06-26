@@ -5,9 +5,7 @@ package com.staxnet.mojo.tomcat;
 //       http://www.apache.org/licenses/LICENSE-2.0 
 
 import java.io.*;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -177,6 +175,12 @@ public class DeployMojo extends AbstractI18NMojo
     private String containerType;
 
     /**
+     * deploy parameters
+     * @parameter
+     */
+    private Properties parameters;
+    
+    /**
      * Gets whether this project uses WAR packaging.
      * 
      * @return whether this project uses WAR packaging
@@ -281,9 +285,16 @@ public class DeployMojo extends AbstractI18NMojo
             if (containerType != null)
                 parameters.put("containerType", containerType);
 
-            ApplicationDeployArchiveResponse res = client.applicationDeployArchive(appid, environment, message,
-                    deployFile.getAbsolutePath(), null, archiveType, deployDelta, parameters,
-                    new HashWriteProgress());
+            
+            com.cloudbees.api.ApplicationDeployArgs.Builder argBuilder = (new com.cloudbees.api.ApplicationDeployArgs.Builder(
+                    appid)).environment(environment).description(message)
+                    .deployPackage(deployFile, archiveType)
+                    .withParams(parameters).withVars(getConfigVariables())
+                    .withProgressFeedback(new HashWriteProgress());
+            if (deployDelta) {
+                argBuilder = argBuilder.withIncrementalDeployment();
+            }
+            ApplicationDeployArchiveResponse res = client.applicationDeployArchive(argBuilder.build());
             System.out.println("Application " + res.getId() + " deployed: " + res.getUrl());
 
         } catch (Exception e) {
@@ -293,6 +304,14 @@ public class DeployMojo extends AbstractI18NMojo
                                            getMessage("StaxMojo.deployFailed"),
                                            e.getMessage());
         }
+    }
+
+    private Map<String, String> getConfigVariables() {
+        Map<String, String> result = Collections.emptyMap();
+        if(parameters != null){
+            result =  new HashMap(parameters);
+        }
+        return result;
     }
 
     private void initAppId(AppConfig appConfig) throws IOException
